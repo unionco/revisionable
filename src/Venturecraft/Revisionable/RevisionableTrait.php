@@ -17,6 +17,20 @@ trait RevisionableTrait
     private $doKeep = array();
 
     /**
+     * Has anything changed that will be stored in the revisions table?
+     *
+     * @var bool $isModelRevisioned
+     */
+    private $isModelRevisioned = false ;
+
+    /**
+     * If we created revisions entries, store the ids here.
+     *
+     * @var array $insertedRevisionIds
+     */
+    private $insertedRevisionIds = [] ;
+
+    /**
      * Keeps the list of values that have been updated
      *
      * @var array
@@ -128,9 +142,15 @@ trait RevisionableTrait
 
             }
 
+            /**
+             * Modify this section from upstream to allow us to save off
+             * revisions ids for use by other models/traits.
+             */
             if (count($revisions) > 0) {
                 $revision = new Revision;
-                \DB::table($revision->getTable())->insert($revisions);
+                foreach ($revisions as $r) {
+                    $this->insertedRevisionIds[] = \DB::table($revision->getTable())->insertGetId($r) ;
+                }
             }
 
         }
@@ -181,6 +201,26 @@ trait RevisionableTrait
     }
 
     /**
+     * Were any revisions made during the model save event?
+     *
+     * @return bool
+     */
+    protected function isModelRevisioned()
+    {
+        return $this->isModelRevisioned ;
+    }
+
+    /**
+     * Return a list of all new revisions ids created during save process
+     *
+     * @return array
+     */
+    protected function getInsertedRevisionIds()
+    {
+        return $this->insertedRevisionIds ;
+    }
+
+    /**
      * Get all of the changes that have been made, that are also supposed
      * to have their changes recorded
      *
@@ -196,6 +236,7 @@ trait RevisionableTrait
             if ($this->isRevisionable($key) && !is_array($value)) {
                 if (!isset($this->originalData[$key]) || $this->originalData[$key] != $this->updatedData[$key]) {
                     $changes_to_record[$key] = $value;
+                    $this->isModelRevisioned = true ;
                 }
             } else {
                 // we don't need these any more, and they could
